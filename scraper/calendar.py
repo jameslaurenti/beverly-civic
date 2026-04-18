@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from utils import BASE_URL, extract_pdf_text, fetch_html, make_session
+from bev_utils import BASE_URL, extract_pdf_text, fetch_html, make_session
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
