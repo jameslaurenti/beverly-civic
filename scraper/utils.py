@@ -22,7 +22,7 @@ def make_session() -> requests.Session:
 def fetch_html(session: requests.Session, url: str) -> BeautifulSoup:
     resp = session.get(url, timeout=15)
     resp.raise_for_status()
-    return BeautifulSoup(resp.text, "lxml")
+    return BeautifulSoup(resp.text, "html.parser")
 
 
 def extract_pdf_text(session: requests.Session, pdf_url: str) -> str:
