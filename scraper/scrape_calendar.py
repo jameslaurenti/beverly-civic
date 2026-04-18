@@ -68,23 +68,25 @@ def _parse_detail(session, detail_url: str) -> dict:
     }
     soup = fetch_html(session, detail_url)
 
-    for row in soup.select("table tr"):
-        cells = row.find_all(["th", "td"])
-        if len(cells) == 2:
-            label = cells[0].get_text(strip=True).lower()
-            value = cells[1].get_text(strip=True)
-            if "date" in label:
-                result["date"] = value
-            elif "time" in label:
-                result["time"] = value
-            elif "location" in label:
-                result["location"] = value
+    # CivicPlus uses .specificDetailHeader / .specificDetailItem for event metadata
+    for block in soup.select(".specificDetail"):
+        header = block.select_one(".specificDetailHeader")
+        item = block.select_one(".specificDetailItem")
+        if not header or not item:
+            continue
+        label = header.get_text(strip=True).lower().rstrip(":")
+        value = item.get_text(separator=" ", strip=True)
+        if label == "date":
+            result["date"] = value
+        elif label == "time":
+            result["time"] = value
+        elif label in ("address", "location"):
+            result["location"] = value
 
-    for selector in (".field-items", ".description", "#CivicAlerts-TargetID", ".fr-view"):
-        el = soup.select_one(selector)
-        if el:
-            result["description"] = el.get_text(separator=" ", strip=True)
-            break
+    # Description lives in .detailsBody but outside the specifics block
+    desc = soup.select_one(".detailsBody .fr-view, .detailsBody .field-items")
+    if desc:
+        result["description"] = desc.get_text(separator=" ", strip=True)
 
     pdf_url = _find_agenda_pdf_url(session, soup)
     if pdf_url:
