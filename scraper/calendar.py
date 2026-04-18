@@ -5,28 +5,47 @@ Scrapes upcoming events from the Beverly MA city calendar, including agenda PDFs
 Outputs a timestamped JSON file to /data each run.
 """
 
+import io
 import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from bev_utils import BASE_URL, extract_pdf_text, fetch_html, make_session
+import pdfplumber
+import requests
+from bs4 import BeautifulSoup
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-CALENDAR_URL = (
-    f"{BASE_URL}/calendar.aspx?CID=47,23,25,26,27,46&showPastEvents=false"
-)
+BASE_URL = "https://www.beverlyma.gov"
+CALENDAR_URL = f"{BASE_URL}/calendar.aspx?CID=47,23,25,26,27,46&showPastEvents=false"
 DATA_DIR = Path(__file__).parent.parent / "data"
+HEADERS = {
+    "User-Agent": "beverly-civic-bot/1.0 (civic data aggregator; contact james.laurenti@gmail.com)"
+}
+
+
+def make_session() -> requests.Session:
+    s = requests.Session()
+    s.headers.update(HEADERS)
+    return s
+
+
+def fetch_html(session: requests.Session, url: str) -> BeautifulSoup:
+    resp = session.get(url, timeout=15)
+    resp.raise_for_status()
+    return BeautifulSoup(resp.text, "html.parser")
+
+
+def extract_pdf_text(session: requests.Session, pdf_url: str) -> str:
+    resp = session.get(pdf_url, timeout=30)
+    resp.raise_for_status()
+    with pdfplumber.open(io.BytesIO(resp.content)) as pdf:
+        return "\n\n".join(page.extract_text() or "" for page in pdf.pages).strip()
 
 
 def _find_agenda_pdf_url(session, detail_soup) -> str | None:
-    """
-    Beverly event detail pages link to an AgendaCenter landing page.
-    That page then has the actual PDF download link.
-    Pattern: /AgendaCenter/ViewFile/Agenda/_MMDDYYYY-NNNN
-    """
     for a in detail_soup.find_all("a", href=True):
         href = a["href"]
         if "AgendaCenter" in href and "ViewFile" not in href:
@@ -43,14 +62,12 @@ def _find_agenda_pdf_url(session, detail_soup) -> str | None:
 
 
 def _parse_detail(session, detail_url: str) -> dict:
-    """Fetch an event detail page and extract structured fields."""
     result = {
         "date": None, "time": None, "location": None, "description": None,
         "agenda_pdf_url": None, "agenda_text": None
     }
     soup = fetch_html(session, detail_url)
 
-    # CivicPlus renders event metadata in a two-column table
     for row in soup.select("table tr"):
         cells = row.find_all(["th", "td"])
         if len(cells) == 2:
@@ -63,14 +80,12 @@ def _parse_detail(session, detail_url: str) -> dict:
             elif "location" in label:
                 result["location"] = value
 
-    # Description lives in varying containers across CivicPlus versions
     for selector in (".field-items", ".description", "#CivicAlerts-TargetID", ".fr-view"):
         el = soup.select_one(selector)
         if el:
             result["description"] = el.get_text(separator=" ", strip=True)
             break
 
-    # Agenda PDF (may not exist yet if event is more than ~14 days out)
     pdf_url = _find_agenda_pdf_url(session, soup)
     if pdf_url:
         result["agenda_pdf_url"] = pdf_url
