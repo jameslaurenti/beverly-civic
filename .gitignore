@@ -1,0 +1,7 @@
+data/*.json
+data/*.pdf
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
