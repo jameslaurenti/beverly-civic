@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Reads scraped JSON files from /data, embeds each item, and upserts to Pinecone.
+Reads scraped JSON files from /data, embeds each item via Pinecone inference,
+and upserts to the beverly-civic index.
 
 Run after scraping:
     PINECONE_API_KEY=... python indexer/index_content.py
@@ -13,19 +14,17 @@ import re
 from pathlib import Path
 
 from pinecone import Pinecone
-from sentence_transformers import SentenceTransformer
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).parent.parent / "data"
-EMBED_MODEL = "all-MiniLM-L6-v2"
 INDEX_NAME = "beverly-civic"
-BATCH_SIZE = 100
+EMBED_MODEL = "multilingual-e5-large"
+BATCH_SIZE = 96  # Pinecone inference limit per request
 
 
 def load_records() -> list[dict]:
-    """Load and deduplicate all scraped JSON files, newest-first."""
     records = {}
     for path in sorted(DATA_DIR.glob("*.json"), reverse=True):
         items = json.loads(path.read_text(encoding="utf-8"))
@@ -43,7 +42,6 @@ def make_doc_id(item: dict) -> str:
 
 
 def make_text(item: dict) -> str:
-    """Build the text we embed — pack in all useful fields."""
     parts = [item.get("title", "")]
     if item.get("date"):
         parts.append(f"Date: {item['date']}")
@@ -69,22 +67,32 @@ def make_metadata(item: dict) -> dict:
     }
 
 
-def index(records: list[dict], model: SentenceTransformer, index) -> None:
+def index(records: list[dict], pc: Pinecone, idx) -> None:
     texts = [make_text(r) for r in records]
-    log.info("Embedding %d records...", len(records))
-    embeddings = model.encode(texts, show_progress_bar=True, batch_size=32)
 
-    vectors = [
-        {"id": make_doc_id(r), "values": emb.tolist(), "metadata": make_metadata(r)}
-        for r, emb in zip(records, embeddings)
-    ]
+    for i in range(0, len(records), BATCH_SIZE):
+        batch_records = records[i : i + BATCH_SIZE]
+        batch_texts = texts[i : i + BATCH_SIZE]
 
-    for i in range(0, len(vectors), BATCH_SIZE):
-        batch = vectors[i : i + BATCH_SIZE]
-        index.upsert(vectors=batch)
-        log.info("Upserted batch %d/%d", min(i + BATCH_SIZE, len(vectors)), len(vectors))
+        log.info("Embedding batch %d-%d...", i + 1, i + len(batch_records))
+        embeddings = pc.inference.embed(
+            model=EMBED_MODEL,
+            inputs=batch_texts,
+            parameters={"input_type": "passage", "truncate": "END"},
+        )
 
-    log.info("Done. %d vectors in index.", len(vectors))
+        vectors = [
+            {
+                "id": make_doc_id(r),
+                "values": emb["values"],
+                "metadata": make_metadata(r),
+            }
+            for r, emb in zip(batch_records, embeddings)
+        ]
+        idx.upsert(vectors=vectors)
+        log.info("Upserted %d vectors", len(vectors))
+
+    log.info("Done. %d total vectors indexed.", len(records))
 
 
 def main():
@@ -96,14 +104,11 @@ def main():
     if not records:
         raise SystemExit(f"No JSON files found in {DATA_DIR}")
 
-    log.info("Loading embedding model: %s", EMBED_MODEL)
-    model = SentenceTransformer(EMBED_MODEL)
-
     pc = Pinecone(api_key=api_key)
     idx = pc.Index(INDEX_NAME)
     log.info("Connected to Pinecone index: %s", INDEX_NAME)
 
-    index(records, model, idx)
+    index(records, pc, idx)
 
 
 if __name__ == "__main__":

@@ -2,13 +2,10 @@
 """
 Beverly Civic chat app.
 
-RAG pipeline: embed question → query Pinecone → generate answer.
-LLM is stubbed until Anthropic billing is set up; the UI shows retrieved
-sources so you can validate the pipeline end-to-end.
+RAG pipeline: embed question via Pinecone inference → query index → generate answer.
+LLM is stubbed until Anthropic billing is set up.
 
 Run:
-    PINECONE_API_KEY=... uvicorn app.main:app --reload
-or:
     PINECONE_API_KEY=... python app/main.py
 """
 
@@ -19,30 +16,26 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from pinecone import Pinecone
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
 
 STATIC_DIR = Path(__file__).parent / "static"
-
 INDEX_NAME = "beverly-civic"
+EMBED_MODEL = "multilingual-e5-large"
 TOP_K = 5
-EMBED_MODEL = "all-MiniLM-L6-v2"
 
-# Loaded once at startup, reused across requests
-_model: SentenceTransformer | None = None
+_pc: Pinecone | None = None
 _index: Any = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _model, _index
-    _model = SentenceTransformer(EMBED_MODEL)
+    global _pc, _index
     api_key = os.environ.get("PINECONE_API_KEY")
     if not api_key:
         raise RuntimeError("PINECONE_API_KEY not set")
-    _index = Pinecone(api_key=api_key).Index(INDEX_NAME)
+    _pc = Pinecone(api_key=api_key)
+    _index = _pc.Index(INDEX_NAME)
     yield
 
 
@@ -54,7 +47,11 @@ class Question(BaseModel):
 
 
 def retrieve(question: str) -> list[dict]:
-    embedding = _model.encode([question])[0].tolist()
+    embedding = _pc.inference.embed(
+        model=EMBED_MODEL,
+        inputs=[question],
+        parameters={"input_type": "query", "truncate": "END"},
+    )[0]["values"]
     results = _index.query(vector=embedding, top_k=TOP_K, include_metadata=True)
     return [
         {
