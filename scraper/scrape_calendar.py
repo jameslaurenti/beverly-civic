@@ -99,9 +99,8 @@ def extract_pdf_text(session: requests.Session, pdf_url: str) -> str:
     if text:
         return text
 
-    # OCR fallback disabled for v1 (scanned PDFs return empty — deferred until Anthropic billing set up)
-    log.info("  PDF has no embedded text — OCR not enabled, skipping")
-    return ""
+    log.info("  PDF has no embedded text — falling back to Claude OCR")
+    return _ocr_pdf_with_claude(pdf_bytes)
 
 
 def _find_agenda_pdf_url(session, detail_soup) -> str | None:
