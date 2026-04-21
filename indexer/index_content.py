@@ -58,12 +58,23 @@ def make_text(item: dict) -> str:
     return " ".join(p for p in parts if p).strip()
 
 
+SNIPPET_MAX = 1500
+
+
 def make_metadata(item: dict) -> dict:
+    content = (
+        item.get("agenda_text")
+        or item.get("body")
+        or item.get("description")
+        or item.get("summary")
+        or ""
+    )
     return {
         "title": item.get("title", ""),
         "url": item.get("detail_url", ""),
         "date": item.get("date") or item.get("posted_date") or "",
         "type": "news" if item.get("posted_date") else "event",
+        "snippet": content[:SNIPPET_MAX],
     }
 
 

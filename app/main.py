@@ -65,6 +65,7 @@ def retrieve(question: str) -> list[dict]:
             "url": m.metadata.get("url", ""),
             "date": m.metadata.get("date", ""),
             "type": m.metadata.get("type", ""),
+            "snippet": m.metadata.get("snippet", ""),
             "score": round(m.score, 3),
         }
         for m in results.matches
@@ -75,10 +76,13 @@ def answer(question: str, sources: list[dict]) -> str:
     if not sources:
         return "I couldn't find anything relevant in the Beverly civic data."
 
-    context = "\n\n".join(
-        f"[{s['type'].upper()}] {s['title']} ({s['date']})\nURL: {s['url']}"
-        for s in sources
-    )
+    context_parts = []
+    for s in sources:
+        entry = f"[{s['type'].upper()}] {s['title']} ({s['date']})\nURL: {s['url']}"
+        if s.get("snippet"):
+            entry += f"\nContent: {s['snippet']}"
+        context_parts.append(entry)
+    context = "\n\n".join(context_parts)
 
     prompt = f"""You are a helpful assistant for residents of Beverly, MA. Answer the question below using only the civic data provided. Be concise and specific. If the data doesn't fully answer the question, say so and share what you do know. Always include relevant links from the data.
 
