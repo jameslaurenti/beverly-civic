@@ -1,5 +1,5 @@
-data/*.json
-data/*.pdf
+data/**/*.json
+data/**/*.pdf
 __pycache__/
 *.pyc
 .env
