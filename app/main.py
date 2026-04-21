@@ -2,11 +2,10 @@
 """
 Beverly Civic chat app.
 
-RAG pipeline: embed question via Pinecone inference → query index → generate answer.
-LLM is stubbed until Anthropic billing is set up.
+RAG pipeline: embed question via Pinecone inference → query index → Claude answer.
 
 Run:
-    PINECONE_API_KEY=... python app/main.py
+    PINECONE_API_KEY=... ANTHROPIC_API_KEY=... python app/main.py
 """
 
 import os
@@ -14,6 +13,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+import anthropic
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from pinecone import Pinecone
@@ -23,19 +23,25 @@ STATIC_DIR = Path(__file__).parent / "static"
 INDEX_NAME = "beverly-civic"
 EMBED_MODEL = "multilingual-e5-large"
 TOP_K = 5
+CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
 _pc: Pinecone | None = None
 _index: Any = None
+_claude: anthropic.Anthropic | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _pc, _index
-    api_key = os.environ.get("PINECONE_API_KEY")
-    if not api_key:
+    global _pc, _index, _claude
+    pinecone_key = os.environ.get("PINECONE_API_KEY")
+    if not pinecone_key:
         raise RuntimeError("PINECONE_API_KEY not set")
-    _pc = Pinecone(api_key=api_key)
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not anthropic_key:
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    _pc = Pinecone(api_key=pinecone_key)
     _index = _pc.Index(INDEX_NAME)
+    _claude = anthropic.Anthropic(api_key=anthropic_key)
     yield
 
 
@@ -66,15 +72,27 @@ def retrieve(question: str) -> list[dict]:
 
 
 def answer(question: str, sources: list[dict]) -> str:
-    # Placeholder — swap this function body for a Claude API call when ready
     if not sources:
         return "I couldn't find anything relevant in the Beverly civic data."
-    lines = [f"- **{s['title']}** ({s['date']}) — [link]({s['url']})" for s in sources]
-    return (
-        "_(AI answer coming soon — Claude API not yet connected)_\n\n"
-        "**Most relevant results for your question:**\n\n"
-        + "\n".join(lines)
+
+    context = "\n\n".join(
+        f"[{s['type'].upper()}] {s['title']} ({s['date']})\nURL: {s['url']}"
+        for s in sources
     )
+
+    prompt = f"""You are a helpful assistant for residents of Beverly, MA. Answer the question below using only the civic data provided. Be concise and specific. If the data doesn't fully answer the question, say so and share what you do know. Always include relevant links from the data.
+
+Civic data:
+{context}
+
+Question: {question}"""
+
+    resp = _claude.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=512,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return resp.content[0].text.strip()
 
 
 @app.post("/ask")
