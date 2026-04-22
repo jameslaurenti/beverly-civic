@@ -23,7 +23,7 @@ from pydantic import BaseModel
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_NAME = "beverly-civic"
 EMBED_MODEL = "multilingual-e5-large"
-TOP_K = 5
+TOP_K = 12
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
 _pc: Pinecone | None = None
@@ -106,7 +106,7 @@ def answer(question: str, sources: list[dict], history: list[dict] = []) -> str:
 
     resp = _claude.messages.create(
         model=CLAUDE_MODEL,
-        max_tokens=512,
+        max_tokens=1024,
         system=system,
         messages=messages,
     )
