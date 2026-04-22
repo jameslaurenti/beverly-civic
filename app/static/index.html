@@ -16,6 +16,10 @@
     .bubble.user { background: #1a3a5c; color: white; align-self: flex-end; }
     .bubble.assistant { background: white; border: 1px solid #ddd; align-self: flex-start; white-space: pre-wrap; }
     .bubble.assistant a { color: #1a3a5c; }
+    .sources { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #666; }
+    .sources span { display: block; margin-bottom: 0.2rem; font-weight: 600; }
+    .sources a { color: #1a3a5c; text-decoration: none; display: block; margin-bottom: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sources a:hover { text-decoration: underline; }
     form { display: flex; gap: 0.5rem; }
     input { flex: 1; padding: 0.75rem 1rem; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
     button { padding: 0.75rem 1.25rem; background: #1a3a5c; color: white; border: none;
@@ -80,6 +84,15 @@
         });
         const data = await res.json();
         thinking.innerHTML = markdownToHtml(data.answer);
+        const cited = data.sources.filter(s => s.url);
+        if (cited.length) {
+          const div = document.createElement('div');
+          div.className = 'sources';
+          div.innerHTML = '<span>Sources</span>' + cited.map(s =>
+            `<a href="${escapeHtml(s.url)}" target="_blank">${escapeHtml(s.title)}</a>`
+          ).join('');
+          thinking.appendChild(div);
+        }
       } catch {
         thinking.textContent = 'Something went wrong. Please try again.';
       }
