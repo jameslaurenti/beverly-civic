@@ -10,6 +10,7 @@ Run:
 
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,8 @@ def answer(question: str, sources: list[dict]) -> str:
     if not sources:
         return "I couldn't find anything relevant in the Beverly civic data."
 
+    today = datetime.now().strftime("%A, %B %d, %Y").replace(" 0", " ")
+
     context_parts = []
     for s in sources:
         entry = f"[{s['type'].upper()}] {s['title']} ({s['date']})\nURL: {s['url']}"
@@ -84,7 +87,7 @@ def answer(question: str, sources: list[dict]) -> str:
         context_parts.append(entry)
     context = "\n\n".join(context_parts)
 
-    prompt = f"""You are a helpful assistant for residents of Beverly, MA. Answer the question below using only the civic data provided. Be concise and specific. If the data doesn't fully answer the question, say so and share what you do know. Always include relevant links from the data.
+    prompt = f"""You are a helpful assistant for residents of Beverly, MA. Today's date is {today}. Answer the question below using only the civic data provided. Be concise and specific. If the data doesn't fully answer the question, say so and share what you do know. Always include relevant links from the data.
 
 Civic data:
 {context}
