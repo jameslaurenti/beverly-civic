@@ -46,6 +46,8 @@
     const form = document.getElementById('form');
     const input = document.getElementById('input');
     const btn = document.getElementById('btn');
+    const MAX_HISTORY = 6; // 3 exchanges
+    let history = [];
 
     function addBubble(text, role) {
       const div = document.createElement('div');
@@ -75,15 +77,18 @@
       input.value = '';
       btn.disabled = true;
       addBubble(text, 'user');
+      history.push({ role: 'user', content: text });
       const thinking = addBubble('Searching Beverly civic data…', 'assistant');
       try {
         const res = await fetch('/ask', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
+          body: JSON.stringify({ text, history: history.slice(0, -1) })
         });
         const data = await res.json();
         thinking.innerHTML = markdownToHtml(data.answer);
+        history.push({ role: 'assistant', content: data.answer });
+        if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
         const cited = data.sources.filter(s => s.url);
         if (cited.length) {
           const div = document.createElement('div');
@@ -95,6 +100,7 @@
         }
       } catch {
         thinking.textContent = 'Something went wrong. Please try again.';
+        history.pop(); // remove the user turn we optimistically pushed
       }
       btn.disabled = false;
       input.focus();

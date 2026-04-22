@@ -51,12 +51,17 @@ app = FastAPI(lifespan=lifespan)
 
 class Question(BaseModel):
     text: str
+    history: list[dict] = []
 
 
-def retrieve(question: str) -> list[dict]:
+def retrieve(question: str, history: list[dict] = []) -> list[dict]:
+    last_assistant = next(
+        (m["content"] for m in reversed(history) if m["role"] == "assistant"), ""
+    )
+    query = f"{last_assistant}\n{question}".strip() if last_assistant else question
     embedding = _pc.inference.embed(
         model=EMBED_MODEL,
-        inputs=[question],
+        inputs=[query],
         parameters={"input_type": "query", "truncate": "END"},
     )[0]["values"]
     results = _index.query(vector=embedding, top_k=TOP_K, include_metadata=True)
@@ -73,7 +78,7 @@ def retrieve(question: str) -> list[dict]:
     ]
 
 
-def answer(question: str, sources: list[dict]) -> str:
+def answer(question: str, sources: list[dict], history: list[dict] = []) -> str:
     if not sources:
         return "I couldn't find anything relevant in the Beverly civic data."
 
@@ -87,25 +92,31 @@ def answer(question: str, sources: list[dict]) -> str:
         context_parts.append(entry)
     context = "\n\n".join(context_parts)
 
-    prompt = f"""You are a helpful assistant for residents of Beverly, MA. Today's date is {today}. Answer the question below using only the civic data provided. Be concise and specific. If the data doesn't fully answer the question, say so and share what you do know. Always include relevant links from the data.
+    system = (
+        f"You are a helpful assistant for residents of Beverly, MA. Today's date is {today}. "
+        "Answer questions using only the civic data provided in the user's message. "
+        "Be concise and specific. If the data doesn't fully answer the question, say so and share what you do know. "
+        "Always include relevant links from the data."
+    )
 
-Civic data:
-{context}
-
-Question: {question}"""
+    messages = list(history) + [{
+        "role": "user",
+        "content": f"Civic data:\n{context}\n\nQuestion: {question}",
+    }]
 
     resp = _claude.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=512,
-        messages=[{"role": "user", "content": prompt}],
+        system=system,
+        messages=messages,
     )
     return resp.content[0].text.strip()
 
 
 @app.post("/ask")
 async def ask(q: Question):
-    sources = retrieve(q.text)
-    response = answer(q.text, sources)
+    sources = retrieve(q.text, q.history)
+    response = answer(q.text, sources, q.history)
     return JSONResponse({"answer": response, "sources": sources})
 
 
