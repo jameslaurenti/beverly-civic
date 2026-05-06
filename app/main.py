@@ -25,7 +25,7 @@ INDEX_NAME = "beverly-civic"
 EMBED_MODEL = "multilingual-e5-large"
 TOP_K = 8          # results returned to Claude
 RETRIEVAL_K = 15   # candidates fetched per query variant before merging
-MIN_SCORE = 0.78
+MIN_SCORE = 0.75
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
 _pc: Pinecone | None = None
@@ -59,11 +59,13 @@ class Question(BaseModel):
 def _query_variants(question: str) -> list[str]:
     resp = _claude.messages.create(
         model=CLAUDE_MODEL,
-        max_tokens=150,
+        max_tokens=200,
         messages=[{"role": "user", "content":
-            f"Rewrite this question 2 different ways to improve search results for a Beverly MA "
-            f"civic information tool. Output only the 2 variants, one per line, no numbering or "
-            f"labels:\n\n{question}"}],
+            f"Given this question about Beverly MA civic information, generate 2 search query variants:\n"
+            f"1. A direct rephrasing of the question\n"
+            f"2. A broader conceptual query capturing the underlying civic topic "
+            f"(e.g. holiday closures, service delays, budget line items, meeting agendas)\n\n"
+            f"Output only the 2 variants, one per line, no numbering or labels:\n\n{question}"}],
     )
     variants = [q.strip() for q in resp.content[0].text.strip().splitlines() if q.strip()]
     return [question] + variants[:2]
