@@ -64,6 +64,9 @@
 
     function markdownToHtml(t) {
       return escapeHtml(t)
+        .replace(/^### (.+)$/gm, '<strong>$1</strong>')
+        .replace(/^## (.+)$/gm, '<strong>$1</strong>')
+        .replace(/^# (.+)$/gm, '<strong>$1</strong>')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>')
         .replace(/^- /gm, '• ')
@@ -78,7 +81,7 @@
       btn.disabled = true;
       addBubble(text, 'user');
       history.push({ role: 'user', content: text });
-      const thinking = addBubble('Searching Beverly civic data…', 'assistant');
+      const thinking = addBubble('Searching Beverly civic data… (first load may take ~30 seconds)', 'assistant');
       try {
         const res = await fetch('/ask', {
           method: 'POST',
@@ -93,9 +96,10 @@
         if (cited.length) {
           const div = document.createElement('div');
           div.className = 'sources';
-          div.innerHTML = '<span>Sources</span>' + cited.map(s =>
-            `<a href="${escapeHtml(s.url)}" target="_blank">${escapeHtml(s.title)}</a>`
-          ).join('');
+          div.innerHTML = '<span>Sources</span>' + cited.map(s => {
+            const label = s.date ? `${escapeHtml(s.title)} — ${escapeHtml(s.date)}` : escapeHtml(s.title);
+            return `<a href="${escapeHtml(s.url)}" target="_blank">${label}</a>`;
+          }).join('');
           thinking.appendChild(div);
         }
       } catch {

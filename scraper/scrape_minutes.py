@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """
-Scrapes Beverly MA City Council meeting minutes from AgendaCenter.
+Scrapes Beverly MA meeting minutes from AgendaCenter.
 
 Usage:
-    python scraper/scrape_minutes.py                  # 2024-present
+    python scraper/scrape_minutes.py                              # City Council, 2024-present
     python scraper/scrape_minutes.py --years 2023 2024 2025 2026
+    python scraper/scrape_minutes.py --catid 16 --committee "Planning Board"
+    python scraper/scrape_minutes.py --catid 17 --committee "Zoning Board of Appeals"
+
+Common catIDs:
+    49 = City Council (default)
+    16 = Planning Board
+    17 = Zoning Board of Appeals
+    10 = Conservation Commission
+    23 = Historic District Commission
+    15 = Community Preservation Committee
 """
 
 import argparse
@@ -29,7 +39,6 @@ log = logging.getLogger(__name__)
 
 BASE_URL = "https://www.beverlyma.gov"
 DATA_DIR = Path(__file__).parent.parent / "data"
-CATEGORY_ID = 49  # City Council
 HEADERS = {
     "User-Agent": "beverly-civic-bot/1.0 (civic data aggregator; contact james.laurenti@gmail.com)"
 }
@@ -41,12 +50,11 @@ def make_session() -> requests.Session:
     return s
 
 
-def fetch_year(session: requests.Session, year: int) -> BeautifulSoup:
-    """Fetch City Council agenda items for a given year via the AJAX endpoint."""
-    log.info("Fetching year %d (catID=%d)", year, CATEGORY_ID)
+def fetch_year(session: requests.Session, year: int, catid: int) -> BeautifulSoup:
+    log.info("Fetching year %d (catID=%d)", year, catid)
     resp = session.post(f"{BASE_URL}/AgendaCenter/UpdateCategoryList", data={
         "year": year,
-        "catID": CATEGORY_ID,
+        "catID": catid,
         "startDate": "",
         "endDate": "",
         "term": "",
@@ -67,7 +75,7 @@ def _parse_date(text: str) -> str:
     return m.group(1) if m else text.split()[0]
 
 
-def parse_meetings(soup: BeautifulSoup) -> list[dict]:
+def parse_meetings(soup: BeautifulSoup, committee: str) -> list[dict]:
     meetings = []
     for row in soup.select("tr.catAgendaRow"):
         minutes_td = row.find("td", class_="minutes")
@@ -99,6 +107,7 @@ def parse_meetings(soup: BeautifulSoup) -> list[dict]:
 
         meetings.append({
             "meeting_id": meeting_id,
+            "committee": committee,
             "date": date,
             "title": title,
             "minutes_url": minutes_url,
@@ -136,10 +145,15 @@ def extract_pdf_text(session: requests.Session, pdf_url: str) -> str:
     return _ocr_pdf(pdf_bytes)
 
 
-def save(meetings: list[dict]) -> Path:
+def _committee_slug(committee: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9]+", "_", committee).strip("_").lower()
+
+
+def save(meetings: list[dict], committee: str) -> Path:
     DATA_DIR.mkdir(exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    out_path = DATA_DIR / f"minutes_{timestamp}.json"
+    slug = _committee_slug(committee)
+    out_path = DATA_DIR / f"minutes_{slug}_{timestamp}.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(meetings, f, indent=2, ensure_ascii=False)
     log.info("Saved %d meetings -> %s", len(meetings), out_path)
@@ -147,11 +161,15 @@ def save(meetings: list[dict]) -> Path:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Scrape Beverly MA City Council minutes")
+    parser = argparse.ArgumentParser(description="Scrape Beverly MA meeting minutes")
     current_year = datetime.now().year
     parser.add_argument("--years", type=int, nargs="+",
                         default=list(range(2024, current_year + 1)),
                         help="Years to scrape (default: 2024 to current year)")
+    parser.add_argument("--catid", type=int, default=49,
+                        help="AgendaCenter category ID (default: 49 = City Council)")
+    parser.add_argument("--committee", type=str, default="City Council",
+                        help="Human-readable committee name (default: City Council)")
     args = parser.parse_args()
 
     session = make_session()
@@ -160,8 +178,8 @@ def main():
     for year in args.years:
         log.info("--- Year %d ---", year)
         try:
-            soup = fetch_year(session, year)
-            meetings = parse_meetings(soup)
+            soup = fetch_year(session, year, args.catid)
+            meetings = parse_meetings(soup, args.committee)
             log.info("  %d meetings with minutes", len(meetings))
         except Exception as e:
             log.error("  Failed to fetch year %d: %s", year, e)
@@ -178,7 +196,7 @@ def main():
             all_meetings.append(meeting)
 
     if all_meetings:
-        save(all_meetings)
+        save(all_meetings, args.committee)
     else:
         log.warning("No meetings with minutes found")
 

@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-Runs the eval set against the live Beverly Civic Assistant and scores results.
+Runs the eval set against the Beverly Civic Assistant and scores results.
 
 Reads:  eval/eval_set.json
 Writes: eval/eval_results.json
 
+Pass/fail is determined by whether the expected source title appears in the
+returned source titles (case-insensitive substring match).
+
 Run:
-    python eval/run_eval.py
-    python eval/run_eval.py --app-url http://localhost:8000   # local app
+    python eval/run_eval.py                                       # prod
+    python eval/run_eval.py --app-url http://localhost:8000       # local
+    python eval/run_eval.py --limit 10                            # first 10 only
+    python eval/run_eval.py --data-types calendar news            # filter by type
 """
 
 import argparse
@@ -37,15 +42,31 @@ def ask(app_url: str, question: str) -> tuple[str, list[dict]]:
     return data.get("answer", ""), data.get("sources", [])
 
 
+def _source_hit(expected_title: str, source_titles: list[str]) -> bool:
+    if not expected_title:
+        return True
+    expected_lower = expected_title.lower()
+    return any(expected_lower in t.lower() for t in source_titles)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--app-url", default=DEFAULT_APP_URL)
+    parser.add_argument("--limit", type=int, help="Run only first N questions")
+    parser.add_argument("--data-types", nargs="+",
+                        help="Filter by data type (calendar news budget minutes library)")
     args = parser.parse_args()
 
     if not EVAL_SET_PATH.exists():
         raise SystemExit(f"Eval set not found at {EVAL_SET_PATH}. Run generate_eval.py first.")
 
     eval_set = json.loads(EVAL_SET_PATH.read_text(encoding="utf-8"))
+
+    if args.data_types:
+        eval_set = [q for q in eval_set if q.get("data_type") in args.data_types]
+    if args.limit:
+        eval_set = eval_set[:args.limit]
+
     log.info("Running %d questions against %s", len(eval_set), args.app_url)
 
     results = []
@@ -53,35 +74,46 @@ def main():
 
     for i, item in enumerate(eval_set, 1):
         q = item["question"]
+        dtype = item.get("data_type", "?")
         log.info("[%d/%d] %s", i, len(eval_set), q)
         try:
             actual_answer, sources = ask(args.app_url, q)
             source_titles = [s.get("title", "") for s in sources]
-            result = {**item, "actual_answer": actual_answer, "sources_returned": source_titles}
+            passed = _source_hit(item.get("source_title", ""), source_titles)
+            result = {
+                **item,
+                "actual_answer": actual_answer,
+                "sources_returned": source_titles,
+                "pass": passed,
+            }
             results.append(result)
-            log.info("  Answer: %s", actual_answer[:120])
+            status = "PASS" if passed else "FAIL"
+            log.info("  %s | top: %s", status, source_titles[0] if source_titles else "none")
+            by_type.setdefault(dtype, []).append(passed)
         except Exception as e:
-            log.warning("  FAILED: %s", e)
-            results.append({**item, "actual_answer": f"ERROR: {e}", "sources_returned": []})
+            log.warning("  ERROR: %s", e)
+            results.append({**item, "actual_answer": f"ERROR: {e}",
+                            "sources_returned": [], "pass": False})
+            by_type.setdefault(dtype, []).append(False)
         if i < len(eval_set):
             time.sleep(1)  # be polite to Render free tier
 
-    RESULTS_PATH.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    RESULTS_PATH.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # Print summary table
-    print("\n" + "="*80)
-    print(f"EVAL RESULTS — {len(results)} questions")
-    print("="*80)
+    print("\n" + "=" * 60)
+    total = len(results)
+    overall = sum(r.get("pass", False) for r in results)
+    print(f"OVERALL: {overall}/{total} ({100 * overall // total}%)")
+    print("-" * 60)
+    for dtype, hits in sorted(by_type.items()):
+        n = len(hits)
+        p = sum(hits)
+        print(f"  {dtype:10s}  {p}/{n} ({100 * p // n}%)")
+    print("-" * 60)
     for r in results:
-        dtype = r.get("data_type", "?")
-        print(f"\n[{dtype.upper()}] Q: {r['question']}")
-        print(f"  Expected: {r['expected_answer'][:120]}")
-        print(f"  Actual:   {r['actual_answer'][:120]}")
-        top_source = r['sources_returned'][0] if r['sources_returned'] else "none"
-        print(f"  Top source: {top_source}")
-
-    print(f"\nFull results saved to {RESULTS_PATH}")
-    print("Review and manually mark pass/fail in eval_results.json")
+        status = "PASS" if r.get("pass") else "FAIL"
+        print(f"  {status} [{r.get('data_type','?'):8s}] {r['question'][:70]}")
+    print(f"\nFull results -> {RESULTS_PATH}")
 
 
 if __name__ == "__main__":

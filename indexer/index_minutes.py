@@ -34,14 +34,15 @@ SNIPPET_MAX = 1500
 
 
 def load_minutes(data_dir: Path) -> list[dict]:
-    """Load all minutes JSON files, deduplicate by meeting_id (newest file wins)."""
+    """Load all minutes JSON files, deduplicate by (committee, meeting_id) (newest file wins)."""
     by_id: dict[str, dict] = {}
     for path in sorted(data_dir.glob("minutes_*.json")):
         items = json.loads(path.read_text(encoding="utf-8"))
         for item in items:
             mid = item.get("meeting_id", "")
+            committee = item.get("committee", "City Council")
             if mid:
-                by_id[mid] = item
+                by_id[f"{committee}|{mid}"] = item
     log.info("Loaded %d unique minutes records", len(by_id))
     return list(by_id.values())
 
@@ -52,8 +53,9 @@ def _summarize(meeting: dict, claude: anthropic.Anthropic) -> str:
     if not minutes_text:
         return ""
 
+    committee = meeting.get("committee", "City Council")
     prompt = (
-        f"Beverly MA City Council meeting minutes from {meeting.get('date', 'unknown date')}:\n\n"
+        f"Beverly MA {committee} meeting minutes from {meeting.get('date', 'unknown date')}:\n\n"
         f"{minutes_text[:4000]}\n\n"
         "Extract the key decisions, votes, and outcomes that Beverly residents would want to know. "
         "Focus on: ordinances passed or rejected, budget approvals, zoning changes, appointments, "
@@ -85,10 +87,11 @@ def build_vectors(meetings: list[dict], claude: anthropic.Anthropic) -> list[dic
             log.info("[%d/%d] Skipping %s — no minutes text", i + 1, len(meetings), date)
             continue
 
-        log.info("[%d/%d] Summarizing: %s", i + 1, len(meetings), date)
+        committee = meeting.get("committee", "City Council")
+        log.info("[%d/%d] Summarizing: %s %s", i + 1, len(meetings), committee, date)
         summary = _summarize(meeting, claude)
 
-        text_parts = ["Beverly MA City Council Meeting Minutes", f"Date: {date}"]
+        text_parts = [f"Beverly MA {committee} Meeting Minutes", f"Date: {date}"]
         if minutes_text:
             text_parts.append(f"\nMinutes:\n{minutes_text[:3000]}")
         if summary:
@@ -99,9 +102,13 @@ def build_vectors(meetings: list[dict], claude: anthropic.Anthropic) -> list[dic
         if summary:
             full_content = f"{minutes_text}\n\nKey decisions:\n{summary}"
 
-        meeting_title = meeting.get("title") or "City Council Meeting"
+        meeting_title = meeting.get("title") or f"{committee} Meeting"
+        # City Council uses legacy ID format for backward compat; other committees include catid prefix
+        committee_slug = re.sub(r"[^a-zA-Z0-9]", "_", committee).lower()
+        vec_id = (f"minutes_{meeting_id}" if committee == "City Council"
+                  else f"minutes_{committee_slug}_{meeting_id}")
         vectors.append({
-            "id": f"minutes_{meeting_id}",
+            "id": vec_id,
             "text": text,
             "metadata": {
                 "title": f"{meeting_title} Minutes — {date}",
