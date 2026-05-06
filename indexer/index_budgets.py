@@ -15,6 +15,7 @@ import re
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
 import pdfplumber
 from pinecone import Pinecone
 from pinecone.exceptions import PineconeApiException
@@ -95,6 +96,7 @@ def index_pages(pages: list[dict], pc: Pinecone, idx) -> None:
 
 
 def main():
+    load_dotenv()
     api_key = os.environ.get("PINECONE_API_KEY")
     if not api_key:
         raise SystemExit("PINECONE_API_KEY not set")

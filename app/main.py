@@ -23,7 +23,9 @@ from pydantic import BaseModel
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_NAME = "beverly-civic"
 EMBED_MODEL = "multilingual-e5-large"
-TOP_K = 12
+TOP_K = 8          # results returned to Claude
+RETRIEVAL_K = 15   # candidates fetched per query variant before merging
+MIN_SCORE = 0.78
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
 _pc: Pinecone | None = None
@@ -54,28 +56,52 @@ class Question(BaseModel):
     history: list[dict] = []
 
 
+def _query_variants(question: str) -> list[str]:
+    resp = _claude.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=150,
+        messages=[{"role": "user", "content":
+            f"Rewrite this question 2 different ways to improve search results for a Beverly MA "
+            f"civic information tool. Output only the 2 variants, one per line, no numbering or "
+            f"labels:\n\n{question}"}],
+    )
+    variants = [q.strip() for q in resp.content[0].text.strip().splitlines() if q.strip()]
+    return [question] + variants[:2]
+
+
+def _embed(text: str) -> list[float]:
+    return _pc.inference.embed(
+        model=EMBED_MODEL,
+        inputs=[text],
+        parameters={"input_type": "query", "truncate": "END"},
+    )[0]["values"]
+
+
 def retrieve(question: str, history: list[dict] = []) -> list[dict]:
     last_assistant = next(
         (m["content"] for m in reversed(history) if m["role"] == "assistant"), ""
     )
-    query = f"{last_assistant}\n{question}".strip() if last_assistant else question
-    embedding = _pc.inference.embed(
-        model=EMBED_MODEL,
-        inputs=[query],
-        parameters={"input_type": "query", "truncate": "END"},
-    )[0]["values"]
-    results = _index.query(vector=embedding, top_k=TOP_K, include_metadata=True)
-    return [
-        {
-            "title": m.metadata.get("title", ""),
-            "url": m.metadata.get("url", ""),
-            "date": m.metadata.get("date", ""),
-            "type": m.metadata.get("type", ""),
-            "snippet": m.metadata.get("snippet", ""),
-            "score": round(m.score, 3),
-        }
-        for m in results.matches
-    ]
+    base_query = f"{last_assistant}\n{question}".strip() if last_assistant else question
+
+    queries = _query_variants(base_query)
+
+    seen: dict[str, dict] = {}
+    for q in queries:
+        results = _index.query(vector=_embed(q), top_k=RETRIEVAL_K, include_metadata=True)
+        for m in results.matches:
+            if m.score < MIN_SCORE:
+                continue
+            if m.id not in seen or m.score > seen[m.id]["score"]:
+                seen[m.id] = {
+                    "title": m.metadata.get("title", ""),
+                    "url": m.metadata.get("url", ""),
+                    "date": m.metadata.get("date", ""),
+                    "type": m.metadata.get("type", ""),
+                    "snippet": m.metadata.get("snippet", ""),
+                    "score": round(m.score, 3),
+                }
+
+    return sorted(seen.values(), key=lambda x: x["score"], reverse=True)[:TOP_K]
 
 
 def answer(question: str, sources: list[dict], history: list[dict] = []) -> str:

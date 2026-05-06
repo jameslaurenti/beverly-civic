@@ -1,33 +1,39 @@
 #!/usr/bin/env python3
 """
-Scrapes upcoming events from the Beverly MA city calendar, including agenda PDFs.
+Scrapes Beverly MA city calendar events across any date range, including agenda PDFs.
 
-Outputs a timestamped JSON file to /data each run.
+Usage:
+    python scraper/scrape_calendar.py                     # current + 2 months ahead
+    python scraper/scrape_calendar.py --months-back 6     # also pull 6 months of history
+    python scraper/scrape_calendar.py --months-ahead 0    # current month only
 """
 
-import base64
+import argparse
 import io
 import json
 import logging
-import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import fitz  # pymupdf
 import pdfplumber
+import pytesseract
 import requests
 from bs4 import BeautifulSoup
+from PIL import Image
+
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://www.beverlyma.gov"
-CALENDAR_URL = f"{BASE_URL}/calendar.aspx?CID=47,23,25,26,27,46&showPastEvents=false"
+CALENDAR_BASE = f"{BASE_URL}/calendar.aspx"
+CALENDAR_IDS = ["47", "23", "25", "26", "27", "46"]
 DATA_DIR = Path(__file__).parent.parent / "data"
 HEADERS = {
     "User-Agent": "beverly-civic-bot/1.0 (civic data aggregator; contact james.laurenti@gmail.com)"
 }
-
 
 def make_session() -> requests.Session:
     s = requests.Session()
@@ -41,51 +47,33 @@ def fetch_html(session: requests.Session, url: str) -> BeautifulSoup:
     return BeautifulSoup(resp.text, "html.parser")
 
 
-OCR_MAX_PAGES = 5
+def _month_range(months_back: int, months_ahead: int):
+    today = date.today()
+    base = today.month - 1  # 0-indexed
+    for delta in range(-months_back, months_ahead + 1):
+        idx = base + delta
+        month = idx % 12 + 1
+        year = today.year + idx // 12
+        yield month, year
 
 
-def _ocr_pdf_with_claude(pdf_bytes: bytes) -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        log.warning("  ANTHROPIC_API_KEY not set — skipping OCR")
-        return ""
 
-    import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
+def fetch_month_soup(session: requests.Session, month: int, year: int) -> BeautifulSoup:
+    """Fetch the calendar HTML for a specific month/year."""
+    url = f"{CALENDAR_BASE}?month={month}&year={year}&CID={','.join(CALENDAR_IDS)}"
+    return fetch_html(session, url)
 
+
+def _ocr_pdf(pdf_bytes: bytes) -> str:
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    pages_to_ocr = min(len(doc), OCR_MAX_PAGES)
-    log.info("  OCR: sending %d/%d pages to Claude vision", pages_to_ocr, len(doc))
-
-    content = []
-    for i in range(pages_to_ocr):
-        page = doc[i]
-        png_bytes = page.get_pixmap(dpi=150).tobytes("png")
-        content.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/png",
-                "data": base64.standard_b64encode(png_bytes).decode(),
-            },
-        })
-
-    content.append({
-        "type": "text",
-        "text": (
-            "These are pages from a Beverly MA government meeting agenda. "
-            "Transcribe all text exactly as it appears. "
-            "Preserve structure (headings, numbered items, bullet points). "
-            "Output only the transcribed text, no commentary."
-        ),
-    })
-
-    resp = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": content}],
-    )
-    return resp.content[0].text.strip()
+    log.info("  OCR: running Tesseract on %d pages", len(doc))
+    texts = []
+    for page in doc:
+        png = page.get_pixmap(dpi=200).tobytes("png")
+        text = pytesseract.image_to_string(Image.open(io.BytesIO(png)))
+        if text.strip():
+            texts.append(text.strip())
+    return "\n\n".join(texts)
 
 
 def extract_pdf_text(session: requests.Session, pdf_url: str) -> str:
@@ -99,8 +87,8 @@ def extract_pdf_text(session: requests.Session, pdf_url: str) -> str:
     if text:
         return text
 
-    log.info("  PDF has no embedded text — falling back to Claude OCR")
-    return _ocr_pdf_with_claude(pdf_bytes)
+    log.info("  PDF has no embedded text — falling back to Tesseract OCR")
+    return _ocr_pdf(pdf_bytes)
 
 
 def _find_agenda_pdf_url(session, detail_soup) -> str | None:
@@ -122,12 +110,11 @@ def _find_agenda_pdf_url(session, detail_soup) -> str | None:
 def _parse_detail(session, detail_url: str) -> dict:
     result = {
         "date": None, "time": None, "location": None, "description": None,
-        "agenda_pdf_url": None, "agenda_text": None
+        "agenda_pdf_url": None, "agenda_text": None,
     }
     soup = fetch_html(session, detail_url)
 
-    headers = soup.select(".specificDetailHeader")
-    for header in headers:
+    for header in soup.select(".specificDetailHeader"):
         label = header.get_text(strip=True).lower()
         item = header.find_next_sibling(class_="specificDetailItem") or header.find_next(class_="specificDetailItem")
         value = item.get_text(strip=True) if item else None
@@ -158,10 +145,7 @@ def _parse_detail(session, detail_url: str) -> dict:
     return result
 
 
-def scrape_events(session) -> list[dict]:
-    log.info("Fetching city calendar...")
-    soup = fetch_html(session, CALENDAR_URL)
-
+def scrape_events(session: requests.Session, soup: BeautifulSoup) -> list[dict]:
     seen = set()
     events = []
 
@@ -200,9 +184,27 @@ def save(events: list[dict]) -> Path:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Scrape Beverly MA city calendar")
+    parser.add_argument("--months-back", type=int, default=0,
+                        help="Months of history to backfill (default: 0)")
+    parser.add_argument("--months-ahead", type=int, default=2,
+                        help="Months ahead to scrape (default: 2)")
+    args = parser.parse_args()
+
     session = make_session()
-    events = scrape_events(session)
-    save(events)
+    all_events = []
+
+    for month, year in _month_range(args.months_back, args.months_ahead):
+        log.info("--- Fetching %d/%d ---", month, year)
+        try:
+            soup = fetch_month_soup(session, month, year)
+            events = scrape_events(session, soup)
+            log.info("  %d events found", len(events))
+            all_events.extend(events)
+        except Exception as e:
+            log.error("  Failed to scrape %d/%d: %s", month, year, e)
+
+    save(all_events)
 
 
 if __name__ == "__main__":
