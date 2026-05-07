@@ -8,26 +8,50 @@ on:
 jobs:
   scrape-and-index:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4.2.2
+    env:
+      PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - uses: actions/setup-python@v5.4.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install system dependencies
+        run: sudo apt-get install -y tesseract-ocr
+
+      - name: Install Python dependencies
         run: pip install -r requirements.txt
 
       - name: Scrape calendar
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python scraper/scrape_calendar.py
+        run: python scraper/scrape_calendar.py --months-ahead 3
+
+      - name: Index calendar
+        run: python indexer/index_calendar.py
 
       - name: Scrape news
         run: python scraper/scrape_news.py
 
-      - name: Index content
-        env:
-          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-        run: python indexer/index_content.py
+      - name: Index news
+        run: python indexer/index_news.py
+
+      - name: Scrape City Council minutes
+        run: python scraper/scrape_minutes.py --catid 49 --committee "City Council"
+
+      - name: Scrape Planning Board minutes
+        run: python scraper/scrape_minutes.py --catid 16 --committee "Planning Board"
+
+      - name: Scrape Zoning Board of Appeals minutes
+        run: python scraper/scrape_minutes.py --catid 17 --committee "Zoning Board of Appeals"
+
+      - name: Index minutes
+        run: python indexer/index_minutes.py
+
+      - name: Scrape library events
+        run: python scraper/scrape_library.py --months-back 1 --months-ahead 2
+
+      - name: Index library events
+        run: python indexer/index_library.py
