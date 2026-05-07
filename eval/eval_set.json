@@ -3,140 +3,126 @@
     "question": "When is the Financial Forecast Committee meeting scheduled?",
     "expected_answer": "The meeting is scheduled for December 9, 2025 at 6:00pm in Conference Room A on the 3rd Floor of Beverly City Hall.",
     "source_title": "Financial Forecast Committee Meeting",
-    "source_date": "November\u00a013,\u00a02025",
+    "source_date": "NovemberÂ 13,Â 2025",
     "data_type": "calendar"
   },
   {
     "question": "What will be discussed at the Financial Forecast Committee meeting?",
     "expected_answer": "The agenda includes opening comments by the chairperson and general committee discussion, approval of minutes, approval of the final draft report, closing commentary, and adjournment.",
     "source_title": "Financial Forecast Committee Meeting",
-    "source_date": "November\u00a013,\u00a02025",
+    "source_date": "NovemberÂ 13,Â 2025",
     "data_type": "calendar"
   },
   {
     "question": "When is the next Historic District Commission meeting in Beverly?",
     "expected_answer": "Wednesday, April 29, 2026 at 7:15 PM at City Council Chambers, Beverly City Hall, 191 Cabot Street, Beverly MA 01915. This is an in-person meeting.",
-    "source_title": "Historic District Commission Meeting",
-    "source_date": "August\u00a07,\u00a02024",
+    "source_title": "Historic Districts Commission Meeting",
+    "source_date": "AugustÂ 7,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "What is being discussed about Chapter 168 at the Historic District Commission meeting?",
     "expected_answer": "Suggested updates to Chapter 168 Historic Buildings and Districts, including the City's Demolition Delay procedures, will be presented and discussed as a Citizen Presentation & Discussion.",
-    "source_title": "Historic District Commission Meeting",
-    "source_date": "August\u00a07,\u00a02024",
+    "source_title": "Historic Districts Commission Meeting",
+    "source_date": "AugustÂ 7,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "When is the next Harbor Management Authority meeting?",
     "expected_answer": "The next meeting is April 15, 2026 at 6:45 pm at the Beverly Police Station Community Room or via Google Meet.",
     "source_title": "Harbor Management Authority Meeting",
-    "source_date": "May\u00a015,\u00a02024",
+    "source_date": "MayÂ 15,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "What improvements are planned for Glover Wharf?",
     "expected_answer": "Planned improvements include installing a dinghy bar and additional fishing-related and dinghy tie-up signage, adding security gates to the commercial float, upgrading electricity on the recreational float, and installing a webcam on the transient float.",
     "source_title": "Harbor Management Authority Meeting",
-    "source_date": "May\u00a015,\u00a02024",
-    "data_type": "calendar"
-  },
-  {
-    "question": "How can I join the South Essex Sewerage District meeting on May 6th?",
-    "expected_answer": "You can attend in person at 50 Fort Avenue, Salem in the Administration Building Board Room at 1:00 PM, or join by phone through GoToMeeting by dialing +1 (224) 501-3412 and using access code 573-249-877.",
-    "source_title": "CANCELLED-South Essex Sewerage District Meeting",
-    "source_date": "February\u00a025,\u00a02026",
-    "data_type": "calendar"
-  },
-  {
-    "question": "What time is the South Essex Sewerage Board meeting scheduled for?",
-    "expected_answer": "The meeting is scheduled for 1:00 PM on May 6, 2026.",
-    "source_title": "CANCELLED-South Essex Sewerage District Meeting",
-    "source_date": "February\u00a025,\u00a02026",
+    "source_date": "MayÂ 15,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "When is the next Beverly Retirement Board meeting?",
     "expected_answer": "The next Beverly Retirement Board meeting is scheduled for April 30, 2026 at 6:00 P.M. at 275 Rantoul Street, Beverly, MA.",
-    "source_title": "Beverly Retirement Board Meeting",
-    "source_date": "December\u00a018,\u00a02024",
+    "source_title": "Beverly Contributory Retirement Board Meeting",
+    "source_date": "DecemberÂ 18,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "Who is the Executive Director of the Beverly Retirement Board?",
     "expected_answer": "Adam Travinski is the Executive Director of the Beverly Retirement Board.",
-    "source_title": "Beverly Retirement Board Meeting",
-    "source_date": "December\u00a018,\u00a02024",
+    "source_title": "Beverly Contributory Retirement Board Meeting",
+    "source_date": "DecemberÂ 18,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "When is the next Stormwater Committee meeting in Beverly?",
     "expected_answer": "Tuesday, November 26, 2024 from 10AM to 11AM at City Council Chambers, City Hall, 191 Cabot Street.",
     "source_title": "Stormwater Committee Meeting",
-    "source_date": "November\u00a026,\u00a02024",
+    "source_date": "NovemberÂ 26,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "What topics will be discussed at the Stormwater Committee meeting?",
     "expected_answer": "The meeting will cover program status updates including ordinances and regulations, dry and wet weather updates, IDDE sampling, city asset inspections and maintenance, private development inspections, LID guidelines, GIS development, Year 7 objectives, and budget.",
     "source_title": "Stormwater Committee Meeting",
-    "source_date": "November\u00a026,\u00a02024",
+    "source_date": "NovemberÂ 26,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "What time is the Financial Forecast Committee meeting on December 9th?",
     "expected_answer": "The meeting is at 6:00pm in Conference Room A, 3rd Floor of Beverly City Hall.",
     "source_title": "Financial Forecast Committee Meeting",
-    "source_date": "November\u00a013,\u00a02024",
+    "source_date": "NovemberÂ 13,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "What will be discussed at the Financial Forecast Committee meeting?",
     "expected_answer": "The agenda includes opening comments by the Chairperson, general committee discussion, approval of minutes, approval of the final draft report, closing commentary, and adjournment.",
     "source_title": "Financial Forecast Committee Meeting",
-    "source_date": "November\u00a013,\u00a02024",
+    "source_date": "NovemberÂ 13,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "When is the next Public Services Committee meeting scheduled?",
     "expected_answer": "Thursday, May 7, 2026 at 6:30 PM in the Council Chambers on the 3rd Floor of Beverly City Hall at 191 Cabot Street.",
-    "source_title": "Regular City Council Meeting",
-    "source_date": "September\u00a09,\u00a02024",
+    "source_title": "Public Services Committee Meeting",
+    "source_date": "SeptemberÂ 9,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "What topic is Mayor Cahill holding a neighborhood meeting about?",
     "expected_answer": "The City's Trash and Recycling Program.",
     "source_title": "Regular City Council Meeting",
-    "source_date": "September\u00a09,\u00a02024",
+    "source_date": "SeptemberÂ 9,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "When is the next Community Preservation Committee meeting?",
     "expected_answer": "Thursday, April 16, 2026 at 7:00 PM in the Council Chambers on the 3rd Floor of Beverly City Hall, 191 Cabot Street.",
     "source_title": "Community Preservation Committee Meeting",
-    "source_date": "February\u00a019,\u00a02026",
+    "source_date": "FebruaryÂ 19,Â 2026",
     "data_type": "calendar"
   },
   {
     "question": "What parks are being reviewed for renovation funding in Round 13?",
     "expected_answer": "Gillis Park (Basketball Court Replacement), Ahearn Park/Goldway Playground, and Gilbert Park/Bartlett Gardens are being reviewed for CPA Funding Round 13.",
     "source_title": "Community Preservation Committee Meeting",
-    "source_date": "February\u00a019,\u00a02026",
+    "source_date": "FebruaryÂ 19,Â 2026",
     "data_type": "calendar"
   },
   {
     "question": "When is the next Beverly Retirement Board meeting?",
     "expected_answer": "The next Beverly Retirement Board meeting is scheduled for April 30, 2026 at 6:00 P.M. at 275 Rantoul Street, Beverly, MA.",
-    "source_title": "Beverly Retirement Board Meeting",
-    "source_date": "July\u00a025,\u00a02024",
+    "source_title": "Beverly Contributory Retirement Board Meeting",
+    "source_date": "JulyÂ 25,Â 2024",
     "data_type": "calendar"
   },
   {
     "question": "Who is the Executive Director of the Beverly Retirement Board?",
     "expected_answer": "Adam Travinski is the Executive Director of the Beverly Retirement Board.",
-    "source_title": "Beverly Retirement Board Meeting",
-    "source_date": "July\u00a025,\u00a02024",
+    "source_title": "Beverly Contributory Retirement Board Meeting",
+    "source_date": "JulyÂ 25,Â 2024",
     "data_type": "calendar"
   },
   {
@@ -212,98 +198,98 @@
   {
     "question": "Why was the Public Works Administration unit restructured for FY24?",
     "expected_answer": "The unit was restructured to consolidate various positions from the Highway Division and Engineering Department into a single unit for central support administrators and staff, allowing this unit to better administer and coordinate among all other Department of Public Service Units and Divisions. There was no overall FTE impact from this restructuring.",
-    "source_title": "Beverly MA FY2025 Proposed Operating Budget \u2014 Page 206",
+    "source_title": "Beverly MA FY2025 Proposed Operating Budget — Page 206",
     "source_date": "2025",
     "data_type": "budget"
   },
   {
     "question": "Why is there a new Public Works Administration unit in the FY24 budget?",
     "expected_answer": "It's a newly restructured unit that consolidates central support administrators and staff from the Highway Division and Engineering Department into a single unit for better coordination across all Public Services divisions. There is no change to the total number of positions.",
-    "source_title": "Beverly MA FY2024 Proposed Operating Budget \u2014 Page 205",
+    "source_title": "Beverly MA FY2024 Proposed Operating Budget — Page 205",
     "source_date": "2024",
     "data_type": "budget"
   },
   {
     "question": "What departments are included in Beverly's Public Safety section?",
     "expected_answer": "The Public Safety section includes six departments: Animal Control, Police Department, Fire Department, Public Safety Dispatch, Emergency Management, and Harbormaster.",
-    "source_title": "Beverly MA FY2025 Proposed Operating Budget \u2014 Page 165",
+    "source_title": "Beverly MA FY2025 Proposed Operating Budget — Page 165",
     "source_date": "2025",
     "data_type": "budget"
   },
   {
     "question": "What is the projected wage increase for teachers in Beverly's FY2026 budget?",
     "expected_answer": "The projected wage increase for Unit A (Teachers) is 6.8% based on FY'25 staffing levels.",
-    "source_title": "Beverly MA FY2026 Proposed Operating Budget \u2014 Page 8",
+    "source_title": "Beverly MA FY2026 Proposed Operating Budget — Page 8",
     "source_date": "2026",
     "data_type": "budget"
   },
   {
     "question": "What percentage of the Beverly Public Schools budget goes to salaries and benefits?",
     "expected_answer": "Salaries, benefits, and other compensation account for 83.4% of the total Beverly Public Schools Budget in FY'26.",
-    "source_title": "Beverly MA FY2026 Proposed Operating Budget \u2014 Page 77",
+    "source_title": "Beverly MA FY2026 Proposed Operating Budget",
     "source_date": "2026",
     "data_type": "budget"
   },
   {
     "question": "What are the main goals for Beverly Public Schools in FY2026?",
     "expected_answer": "The three core goals are: fostering a sense of belonging for every student and staff member, empowering educators through meaningful professional growth opportunities, and upholding a commitment to innovative practices and the highest educational standards.",
-    "source_title": "Beverly MA FY2026 Proposed Operating Budget \u2014 Page 6",
+    "source_title": "Beverly MA FY2026 Proposed Operating Budget — Page 6",
     "source_date": "2026",
     "data_type": "budget"
   },
   {
     "question": "Why did the FY2024 budget increase so much compared to last year?",
     "expected_answer": "The budget increased by $6,944,500 primarily due to non-discretionary spending requirements and modest revenue increases. The city addressed the initial imbalance by refining requested funding, pulling some capital investments into FY2023, and relying on steady revenue streams to cover cost increases.",
-    "source_title": "Beverly MA FY2024 Proposed Operating Budget \u2014 Page 21",
+    "source_title": "Beverly MA FY2024 Proposed Operating Budget — Page 21",
     "source_date": "2024",
     "data_type": "budget"
   },
   {
     "question": "How much is the General Fund budget increasing in FY2025?",
     "expected_answer": "The General Fund budget is proposed to increase by 5.38% over the FY2024 budget.",
-    "source_title": "Beverly MA FY2025 Proposed Operating Budget \u2014 Page 22",
+    "source_title": "Beverly MA FY2025 Proposed Operating Budget",
     "source_date": "2025",
     "data_type": "budget"
   },
   {
     "question": "Why does Beverly's budget use different accounting methods than regular GAAP accounting?",
     "expected_answer": "Beverly uses budgetary basis accounting in accordance with Massachusetts state law and Department of Revenue (DOR) accounting practices. This method is required for the city's annual budget and property tax certification process, even though it departs from generally accepted accounting principles (GAAP) in several ways.",
-    "source_title": "Beverly MA FY2025 Proposed Operating Budget \u2014 Page 17",
+    "source_title": "Beverly MA FY2025 Proposed Operating Budget — Page 17",
     "source_date": "2025",
     "data_type": "budget"
   },
   {
     "question": "What is the Fire Department budget for FY2025 and how does it compare to last year?",
     "expected_answer": "The FY2025 Fire Department budget is $7,965,853, which represents a decrease of $298,309 or 3.61% compared to the prior year (FY2024).",
-    "source_title": "Beverly MA FY2025 Proposed Operating Budget \u2014 Page 178",
+    "source_title": "Beverly MA FY2025 Proposed Operating Budget — Page 178",
     "source_date": "2025",
     "data_type": "budget"
   },
   {
     "question": "How much is the Fire Department budget increasing for FY2024?",
     "expected_answer": "The Fire Department budget is increasing by $327,910, which represents a 4.13% increase compared to the prior year.",
-    "source_title": "Beverly MA FY2024 Proposed Operating Budget \u2014 Page 171",
+    "source_title": "Beverly MA FY2024 Proposed Operating Budget — Page 171",
     "source_date": "2024",
     "data_type": "budget"
   },
   {
     "question": "How far ahead does Beverly's capital plan look?",
     "expected_answer": "The plan covers a five-year period as required by the Beverly City Charter, but also includes projects that may need attention within the next ten years to support long-term financial and service planning.",
-    "source_title": "Beverly MA FY2024 Proposed Operating Budget \u2014 Page 302",
+    "source_title": "Beverly MA FY2024 Proposed Operating Budget — Page 302",
     "source_date": "2024",
     "data_type": "budget"
   },
   {
     "question": "How far ahead does Beverly's capital plan look?",
     "expected_answer": "The plan covers at least five years as required by the Beverly City Charter, but also includes projects that may need attention within the next ten years to support long-term financial and service planning.",
-    "source_title": "Beverly MA FY2025 Proposed Operating Budget \u2014 Page 308",
+    "source_title": "Beverly MA FY2025 Proposed Operating Budget — Page 308",
     "source_date": "2025",
     "data_type": "budget"
   },
   {
     "question": "How much money is being transferred for road and sidewalk work in FY25?",
     "expected_answer": "The proposed budget includes $1.25M transfer to a paving account for road and sidewalk work. This will be combined with other resources like State Chapter 90 funds and grant funding.",
-    "source_title": "Beverly MA FY2025 Proposed Operating Budget \u2014 Page 289",
+    "source_title": "Beverly MA FY2025 Proposed Operating Budget — Page 289",
     "source_date": "2025",
     "data_type": "budget"
   }

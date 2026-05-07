@@ -23,7 +23,7 @@ from pydantic import BaseModel
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_NAME = "beverly-civic"
 EMBED_MODEL = "multilingual-e5-large"
-TOP_K = 8          # results returned to Claude
+TOP_K = 10         # results returned to Claude
 RETRIEVAL_K = 15   # candidates fetched per query variant before merging
 MIN_SCORE = 0.75
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
@@ -79,6 +79,10 @@ def _embed(text: str) -> list[float]:
     )[0]["values"]
 
 
+ORIGINAL_QUERY_BOOST = 0.015  # boosts original query results vs. LLM-generated variants
+MIN_CALENDAR = 1              # always surface at least 1 calendar event if any exist above threshold
+
+
 def retrieve(question: str, history: list[dict] = []) -> list[dict]:
     last_assistant = next(
         (m["content"] for m in reversed(history) if m["role"] == "assistant"), ""
@@ -88,19 +92,21 @@ def retrieve(question: str, history: list[dict] = []) -> list[dict]:
     queries = _query_variants(base_query)
 
     seen: dict[str, dict] = {}
-    for q in queries:
+    for qi, q in enumerate(queries):
+        boost = ORIGINAL_QUERY_BOOST if qi == 0 else 0.0
         results = _index.query(vector=_embed(q), top_k=RETRIEVAL_K, include_metadata=True)
         for m in results.matches:
             if m.score < MIN_SCORE:
                 continue
-            if m.id not in seen or m.score > seen[m.id]["score"]:
+            effective = round(m.score + boost, 3)
+            if m.id not in seen or effective > seen[m.id]["score"]:
                 seen[m.id] = {
                     "title": m.metadata.get("title", ""),
                     "url": m.metadata.get("url", ""),
                     "date": m.metadata.get("date", ""),
                     "type": m.metadata.get("type", ""),
                     "snippet": m.metadata.get("snippet", ""),
-                    "score": round(m.score, 3),
+                    "score": effective,
                 }
 
     ranked = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
@@ -116,7 +122,24 @@ def retrieve(question: str, history: list[dict] = []) -> list[dict]:
             title_counts[key] = title_counts.get(key, 0) + 1
             results.append(r)
 
-    return results[:TOP_K]
+    # Guarantee at least MIN_CALENDAR calendar results so specific agenda questions
+    # aren't completely crowded out by meeting minutes chunks. Calendar events may rank
+    # outside TOP_K — reserve the last slot(s) for them rather than letting sort push
+    # them back out.
+    top_window = results[:TOP_K]
+    cal_count = sum(1 for r in top_window if r.get("type") == "calendar")
+    if cal_count < MIN_CALENDAR:
+        top_ids = {id(r) for r in top_window}
+        calendar_extras = [r for r in results if r.get("type") == "calendar" and id(r) not in top_ids]
+        needed = MIN_CALENDAR - cal_count
+        if calendar_extras:
+            # Replace the lowest-scoring non-calendar slots with the best calendar extras
+            non_cal_slots = [r for r in top_window if r.get("type") != "calendar"]
+            cal_slots = [r for r in top_window if r.get("type") == "calendar"]
+            top_window = non_cal_slots[: TOP_K - len(cal_slots) - needed] + cal_slots + calendar_extras[:needed]
+            top_window.sort(key=lambda x: x["score"], reverse=True)
+
+    return top_window[:TOP_K]
 
 
 def answer(question: str, sources: list[dict], history: list[dict] = []) -> str:
