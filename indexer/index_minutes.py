@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-Indexes Beverly MA City Council meeting minutes into Pinecone.
+Indexes Beverly MA meeting minutes into Pinecone using per-chunk vectors.
 
-Uses Claude to extract key decisions, votes, and outcomes so residents
-can ask "what happened at last week's council meeting?"
+Each meeting produces:
+  _c0  — Claude summary of key decisions (overview chunk)
+  _c1, _c2, ...  — overlapping fixed-size windows of the raw OCR text
 
 Run:
     python indexer/index_minutes.py
+    python indexer/index_minutes.py --clean   # delete old single-meeting vectors first
 """
 
+import argparse
 import json
 import logging
 import os
@@ -30,11 +33,13 @@ EMBED_MODEL = "multilingual-e5-large"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 BATCH_SIZE = 96
 BATCH_PAUSE = 20
-SNIPPET_MAX = 1500
+
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 150
 
 
 def load_minutes(data_dir: Path) -> list[dict]:
-    """Load all minutes JSON files, deduplicate by (committee, meeting_id) (newest file wins)."""
+    """Load all minutes JSON files, deduplicate by (committee, meeting_id) — newest file wins."""
     by_id: dict[str, dict] = {}
     for path in sorted(data_dir.glob("minutes_*.json")):
         items = json.loads(path.read_text(encoding="utf-8"))
@@ -47,8 +52,43 @@ def load_minutes(data_dir: Path) -> list[dict]:
     return list(by_id.values())
 
 
+def _base_id(meeting: dict) -> str:
+    mid = meeting["meeting_id"]
+    committee = meeting.get("committee", "City Council")
+    if committee == "City Council":
+        return f"minutes_{mid}"
+    slug = re.sub(r"[^a-zA-Z0-9]", "_", committee).lower()
+    return f"minutes_{slug}_{mid}"
+
+
+def _old_format_ids(meetings: list[dict]) -> list[str]:
+    """Return the pre-chunking vector IDs (no _cN suffix) so they can be deleted."""
+    return [_base_id(m) for m in meetings if m.get("meeting_id")]
+
+
+def delete_old_vectors(meetings: list[dict], idx) -> None:
+    ids = _old_format_ids(meetings)
+    if not ids:
+        return
+    log.info("Deleting %d old single-meeting vectors...", len(ids))
+    for i in range(0, len(ids), 1000):
+        batch = ids[i: i + 1000]
+        idx.delete(ids=batch)
+    log.info("Deleted old vectors.")
+
+
+def chunk_text(text: str) -> list[str]:
+    chunks = []
+    start = 0
+    while start < len(text):
+        chunks.append(text[start: start + CHUNK_SIZE])
+        if start + CHUNK_SIZE >= len(text):
+            break
+        start += CHUNK_SIZE - CHUNK_OVERLAP
+    return chunks
+
+
 def _summarize(meeting: dict, claude: anthropic.Anthropic) -> str:
-    """Ask Claude to extract decisions, votes, and outcomes from raw minutes text."""
     minutes_text = (meeting.get("minutes_text") or "").strip()
     if not minutes_text:
         return ""
@@ -77,47 +117,57 @@ def _summarize(meeting: dict, claude: anthropic.Anthropic) -> str:
 
 def build_vectors(meetings: list[dict], claude: anthropic.Anthropic) -> list[dict]:
     vectors = []
+
     for i, meeting in enumerate(meetings):
         meeting_id = meeting.get("meeting_id", "")
         date = meeting.get("date", "").strip()
         minutes_text = (meeting.get("minutes_text") or "").strip()
         minutes_url = meeting.get("minutes_url", "")
+        committee = meeting.get("committee", "City Council")
+        meeting_title = meeting.get("title") or f"{committee} Meeting"
+        display_title = f"{meeting_title} Minutes — {date}"
+        base = _base_id(meeting)
 
         if not meeting_id or not minutes_text:
-            log.info("[%d/%d] Skipping %s — no minutes text", i + 1, len(meetings), date)
+            log.info("[%d/%d] Skipping %s %s — no text", i + 1, len(meetings), committee, date)
             continue
 
-        committee = meeting.get("committee", "City Council")
-        log.info("[%d/%d] Summarizing: %s %s", i + 1, len(meetings), committee, date)
+        log.info("[%d/%d] Chunking: %s %s", i + 1, len(meetings), committee, date)
+
+        # Chunk 0: Claude summary (overview — answers "what happened at this meeting?")
         summary = _summarize(meeting, claude)
-
-        text_parts = [f"Beverly MA {committee} Meeting Minutes", f"Date: {date}"]
-        if minutes_text:
-            text_parts.append(f"\nMinutes:\n{minutes_text[:3000]}")
         if summary:
-            text_parts.append(f"\nKey decisions and outcomes:\n{summary}")
-        text = "\n".join(text_parts)
+            header = f"Beverly MA {committee} Meeting Minutes — {date}\nKey decisions and outcomes:\n"
+            vectors.append({
+                "id": f"{base}_c0",
+                "text": header + summary,
+                "metadata": {
+                    "title": display_title,
+                    "date": date,
+                    "url": minutes_url,
+                    "type": "minutes",
+                    "snippet": f"Summary of {committee} meeting on {date}:\n{summary}",
+                    "chunk": 0,
+                },
+            })
 
-        full_content = minutes_text
-        if summary:
-            full_content = f"{minutes_text}\n\nKey decisions:\n{summary}"
-
-        meeting_title = meeting.get("title") or f"{committee} Meeting"
-        # City Council uses legacy ID format for backward compat; other committees include catid prefix
-        committee_slug = re.sub(r"[^a-zA-Z0-9]", "_", committee).lower()
-        vec_id = (f"minutes_{meeting_id}" if committee == "City Council"
-                  else f"minutes_{committee_slug}_{meeting_id}")
-        vectors.append({
-            "id": vec_id,
-            "text": text,
-            "metadata": {
-                "title": f"{meeting_title} Minutes — {date}",
-                "date": date,
-                "url": minutes_url,
-                "type": "minutes",
-                "snippet": full_content[:SNIPPET_MAX],
-            },
-        })
+        # Chunks 1..N: overlapping windows of the raw OCR text
+        chunks = chunk_text(minutes_text)
+        log.info("  %d chars -> %d chunks", len(minutes_text), len(chunks))
+        for n, chunk in enumerate(chunks, start=1):
+            header = f"Beverly MA {committee} Meeting Minutes — {date}\n\n"
+            vectors.append({
+                "id": f"{base}_c{n}",
+                "text": header + chunk,
+                "metadata": {
+                    "title": display_title,
+                    "date": date,
+                    "url": minutes_url,
+                    "type": "minutes",
+                    "snippet": chunk,
+                    "chunk": n,
+                },
+            })
 
     return vectors
 
@@ -144,7 +194,7 @@ def upsert_vectors(vectors: list[dict], pc: Pinecone, idx) -> None:
     for i in range(0, len(vectors), BATCH_SIZE):
         batch = vectors[i: i + BATCH_SIZE]
         batch_texts = texts[i: i + BATCH_SIZE]
-        log.info("Embedding minutes %d-%d...", i + 1, i + len(batch))
+        log.info("Embedding chunks %d-%d...", i + 1, i + len(batch))
         embeddings = _embed_with_retry(pc, batch_texts)
         records = [
             {"id": v["id"], "values": emb["values"], "metadata": v["metadata"]}
@@ -157,6 +207,11 @@ def upsert_vectors(vectors: list[dict], pc: Pinecone, idx) -> None:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Index Beverly MA meeting minutes (chunked)")
+    parser.add_argument("--clean", action="store_true",
+                        help="Delete old single-meeting vectors before upserting chunks")
+    args = parser.parse_args()
+
     load_dotenv(Path(__file__).parent.parent / ".env")
     pinecone_key = os.environ.get("PINECONE_API_KEY")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -174,8 +229,11 @@ def main():
     idx = pc.Index(INDEX_NAME)
     log.info("Connected to Pinecone index: %s", INDEX_NAME)
 
+    if args.clean:
+        delete_old_vectors(meetings, idx)
+
     vectors = build_vectors(meetings, claude)
-    log.info("%d minutes records ready to index", len(vectors))
+    log.info("%d total chunks ready to index", len(vectors))
 
     upsert_vectors(vectors, pc, idx)
     log.info("Done.")

@@ -105,8 +105,9 @@ def retrieve(question: str, history: list[dict] = []) -> list[dict]:
 
     ranked = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
 
-    # Cap at MAX_PER_TITLE per unique title so recurring events don't flood results
-    MAX_PER_TITLE = 2
+    # Cap per unique title: prevents recurring calendar events from flooding results,
+    # while allowing up to 3 chunks from the same meeting to surface together.
+    MAX_PER_TITLE = 3
     title_counts: dict[str, int] = {}
     results = []
     for r in ranked:
