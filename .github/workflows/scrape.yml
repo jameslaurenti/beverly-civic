@@ -29,14 +29,16 @@ jobs:
       - name: Scrape calendar
         run: python scraper/scrape_calendar.py --months-ahead 3
 
-      - name: Index calendar
-        run: python indexer/index_calendar.py
+      # Indexing paused until June 1 — Pinecone free-tier 5M token/month quota exhausted.
+      # Scrapers still run to keep JSON data fresh; re-enable index steps on June 1.
+      # - name: Index calendar
+      #   run: python indexer/index_calendar.py
 
       - name: Scrape news
         run: python scraper/scrape_news.py
 
-      - name: Index news
-        run: python indexer/index_news.py
+      # - name: Index news
+      #   run: python indexer/index_news.py
 
       - name: Scrape City Council minutes
         run: python scraper/scrape_minutes.py --catid 49 --committee "City Council"
@@ -47,11 +49,11 @@ jobs:
       - name: Scrape Zoning Board of Appeals minutes
         run: python scraper/scrape_minutes.py --catid 17 --committee "Zoning Board of Appeals"
 
-      - name: Index minutes
-        run: python indexer/index_minutes.py
+      # - name: Index minutes
+      #   run: python indexer/index_minutes.py
 
       - name: Scrape library events
         run: python scraper/scrape_library.py --months-back 1 --months-ahead 2
 
-      - name: Index library events
-        run: python indexer/index_library.py
+      # - name: Index library events
+      #   run: python indexer/index_library.py
