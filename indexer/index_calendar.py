@@ -5,12 +5,12 @@ Indexes Beverly MA city calendar events from JSON scrape files into Pinecone.
 Each event becomes one vector. Events without agenda text are still indexed
 so metadata-only queries (what meetings are this week?) work.
 
-Already-indexed events are overwritten in place (idempotent by EID).
-
 Run:
-    python indexer/index_calendar.py
+    python indexer/index_calendar.py            # skip already-indexed events
+    python indexer/index_calendar.py --force    # re-embed everything
 """
 
+import argparse
 import json
 import logging
 import os
@@ -21,7 +21,6 @@ from urllib.parse import parse_qs, urlparse
 
 from dotenv import load_dotenv
 from pinecone import Pinecone
-from pinecone.exceptions import PineconeApiException
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -36,7 +35,7 @@ BATCH_PAUSE = 20
 def _clean(s: str | None) -> str:
     if not s:
         return ""
-    return s.replace("\xa0", " ").replace(" ", " ").strip()
+    return s.replace("\xa0", " ").replace(" ", " ").strip()
 
 
 def _eid(detail_url: str) -> str | None:
@@ -107,6 +106,15 @@ def build_vectors(events: list[dict]) -> list[dict]:
     return vectors
 
 
+def _fetch_existing_ids(idx, ids: list[str]) -> set[str]:
+    existing = set()
+    for i in range(0, len(ids), 100):
+        batch = ids[i:i + 100]
+        result = idx.fetch(ids=batch)
+        existing.update(result.vectors.keys())
+    return existing
+
+
 def _embed_with_retry(pc: Pinecone, texts: list[str]) -> list:
     for attempt in range(4):
         try:
@@ -115,8 +123,8 @@ def _embed_with_retry(pc: Pinecone, texts: list[str]) -> list:
                 inputs=texts,
                 parameters={"input_type": "passage", "truncate": "END"},
             )
-        except PineconeApiException as e:
-            if e.status == 429 and attempt < 3:
+        except Exception as e:
+            if "429" in str(e) and "RESOURCE_EXHAUSTED" not in str(e) and attempt < 3:
                 wait = 60 * (attempt + 1)
                 log.warning("Rate limited — waiting %ds before retry %d/3", wait, attempt + 1)
                 time.sleep(wait)
@@ -142,6 +150,11 @@ def upsert_vectors(vectors: list[dict], pc: Pinecone, idx) -> None:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Index Beverly MA calendar events")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-embed and upsert all events, even if already indexed")
+    args = parser.parse_args()
+
     load_dotenv()
     api_key = os.environ.get("PINECONE_API_KEY")
     if not api_key:
@@ -154,6 +167,18 @@ def main():
     pc = Pinecone(api_key=api_key)
     idx = pc.Index(INDEX_NAME)
     log.info("Connected to Pinecone index: %s", INDEX_NAME)
+
+    if not args.force:
+        all_ids = [v["id"] for v in vectors]
+        existing = _fetch_existing_ids(idx, all_ids)
+        before = len(vectors)
+        vectors = [v for v in vectors if v["id"] not in existing]
+        log.info("%d new events to index (%d already indexed, skipping)",
+                 len(vectors), before - len(vectors))
+
+    if not vectors:
+        log.info("Nothing new to index.")
+        return
 
     upsert_vectors(vectors, pc, idx)
     log.info("Done.")

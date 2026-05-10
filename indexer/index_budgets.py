@@ -3,12 +3,14 @@
 Indexes Beverly MA fiscal budget PDFs into Pinecone, one vector per page.
 
 Add a new budget PDF to data/budgets/ and re-run to index it.
-Already-indexed pages are overwritten in place (idempotent by doc ID).
+Already-indexed pages are skipped by default (idempotent by doc ID).
 
 Run:
-    PINECONE_API_KEY=... python indexer/index_budgets.py
+    PINECONE_API_KEY=... python indexer/index_budgets.py           # skip existing
+    PINECONE_API_KEY=... python indexer/index_budgets.py --force   # re-embed all
 """
 
+import argparse
 import logging
 import os
 import re
@@ -18,7 +20,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 import pdfplumber
 from pinecone import Pinecone
-from pinecone.exceptions import PineconeApiException
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ BUDGETS_DIR = Path(__file__).parent.parent / "data" / "budgets"
 INDEX_NAME = "beverly-civic"
 EMBED_MODEL = "multilingual-e5-large"
 BATCH_SIZE = 96
+BATCH_PAUSE = 20
 MIN_PAGE_CHARS = 80  # skip pages that are mostly images/charts
 
 
@@ -58,7 +60,13 @@ def extract_pages(pdf_path: Path) -> list[dict]:
     return pages
 
 
-BATCH_PAUSE = 20  # seconds between batches to stay under free-tier rate limit
+def _fetch_existing_ids(idx, ids: list[str]) -> set[str]:
+    existing = set()
+    for i in range(0, len(ids), 100):
+        batch = ids[i:i + 100]
+        result = idx.fetch(ids=batch)
+        existing.update(result.vectors.keys())
+    return existing
 
 
 def _embed_with_retry(pc: Pinecone, texts: list[str]) -> list:
@@ -69,8 +77,8 @@ def _embed_with_retry(pc: Pinecone, texts: list[str]) -> list:
                 inputs=texts,
                 parameters={"input_type": "passage", "truncate": "END"},
             )
-        except PineconeApiException as e:
-            if e.status == 429 and attempt < 3:
+        except Exception as e:
+            if "429" in str(e) and "RESOURCE_EXHAUSTED" not in str(e) and attempt < 3:
                 wait = 60 * (attempt + 1)
                 log.warning("Rate limited — waiting %ds before retry %d/3", wait, attempt + 1)
                 time.sleep(wait)
@@ -96,6 +104,11 @@ def index_pages(pages: list[dict], pc: Pinecone, idx) -> None:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Index Beverly MA budget PDFs")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-embed all pages, even if already indexed")
+    args = parser.parse_args()
+
     load_dotenv()
     api_key = os.environ.get("PINECONE_API_KEY")
     if not api_key:
@@ -109,12 +122,26 @@ def main():
     idx = pc.Index(INDEX_NAME)
     log.info("Connected to Pinecone index: %s", INDEX_NAME)
 
+    all_pages = []
     for pdf_path in pdfs:
         log.info("Processing %s...", pdf_path.name)
-        pages = extract_pages(pdf_path)
-        if pages:
-            index_pages(pages, pc, idx)
+        all_pages.extend(extract_pages(pdf_path))
 
+    log.info("%d total pages extracted", len(all_pages))
+
+    if not args.force:
+        all_ids = [p["id"] for p in all_pages]
+        existing = _fetch_existing_ids(idx, all_ids)
+        before = len(all_pages)
+        all_pages = [p for p in all_pages if p["id"] not in existing]
+        log.info("%d new pages to index (%d already indexed, skipping)",
+                 len(all_pages), before - len(all_pages))
+
+    if not all_pages:
+        log.info("Nothing new to index.")
+        return
+
+    index_pages(all_pages, pc, idx)
     log.info("All budgets indexed.")
 
 

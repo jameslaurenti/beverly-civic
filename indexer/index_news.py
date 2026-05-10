@@ -7,9 +7,11 @@ April 20", "trash pickup delayed one day") so colloquial resident queries
 surface the right article even when the title is non-obvious.
 
 Run:
-    python indexer/index_news.py
+    python indexer/index_news.py            # skip already-indexed articles
+    python indexer/index_news.py --force    # re-enrich and re-embed everything
 """
 
+import argparse
 import json
 import logging
 import os
@@ -20,7 +22,6 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 from pinecone import Pinecone
-from pinecone.exceptions import PineconeApiException
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -115,6 +116,15 @@ def build_vectors(articles: list[dict], claude: anthropic.Anthropic) -> list[dic
     return vectors
 
 
+def _fetch_existing_ids(idx, ids: list[str]) -> set[str]:
+    existing = set()
+    for i in range(0, len(ids), 100):
+        batch = ids[i:i + 100]
+        result = idx.fetch(ids=batch)
+        existing.update(result.vectors.keys())
+    return existing
+
+
 def _embed_with_retry(pc: Pinecone, texts: list[str]) -> list:
     for attempt in range(4):
         try:
@@ -123,8 +133,8 @@ def _embed_with_retry(pc: Pinecone, texts: list[str]) -> list:
                 inputs=texts,
                 parameters={"input_type": "passage", "truncate": "END"},
             )
-        except PineconeApiException as e:
-            if e.status == 429 and attempt < 3:
+        except Exception as e:
+            if "429" in str(e) and "RESOURCE_EXHAUSTED" not in str(e) and attempt < 3:
                 wait = 60 * (attempt + 1)
                 log.warning("Rate limited — waiting %ds before retry %d/3", wait, attempt + 1)
                 time.sleep(wait)
@@ -150,6 +160,11 @@ def upsert_vectors(vectors: list[dict], pc: Pinecone, idx) -> None:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Index Beverly MA news articles")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-enrich and re-embed all articles, even if already indexed")
+    args = parser.parse_args()
+
     load_dotenv(Path(__file__).parent.parent / ".env")
     pinecone_key = os.environ.get("PINECONE_API_KEY")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -162,11 +177,23 @@ def main():
     if not articles:
         raise SystemExit(f"No news_*.json files found in {DATA_DIR}")
 
-    claude = anthropic.Anthropic(api_key=anthropic_key)
     pc = Pinecone(api_key=pinecone_key)
     idx = pc.Index(INDEX_NAME)
     log.info("Connected to Pinecone index: %s", INDEX_NAME)
 
+    if not args.force:
+        candidate_ids = [_make_doc_id(a["detail_url"]) for a in articles if a.get("detail_url")]
+        existing = _fetch_existing_ids(idx, candidate_ids)
+        before = len(articles)
+        articles = [a for a in articles if _make_doc_id(a.get("detail_url", "")) not in existing]
+        log.info("%d new articles to process (%d already indexed, skipping)",
+                 len(articles), before - len(articles))
+
+    if not articles:
+        log.info("Nothing new to index.")
+        return
+
+    claude = anthropic.Anthropic(api_key=anthropic_key)
     vectors = build_vectors(articles, claude)
     log.info("%d news articles ready to index", len(vectors))
 

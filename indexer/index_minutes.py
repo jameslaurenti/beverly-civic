@@ -7,8 +7,10 @@ Each meeting produces:
   _c1, _c2, ...  — overlapping fixed-size windows of the raw OCR text
 
 Run:
-    python indexer/index_minutes.py
-    python indexer/index_minutes.py --clean   # delete old single-meeting vectors first
+    python indexer/index_minutes.py                     # skip already-indexed meetings
+    python indexer/index_minutes.py --force             # re-embed everything
+    python indexer/index_minutes.py --clean             # delete old single-meeting vectors first
+    python indexer/index_minutes.py --clean --force     # clean + re-embed all
 """
 
 import argparse
@@ -22,7 +24,6 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 from pinecone import Pinecone
-from pinecone.exceptions import PineconeApiException
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -172,6 +173,15 @@ def build_vectors(meetings: list[dict], claude: anthropic.Anthropic) -> list[dic
     return vectors
 
 
+def _fetch_existing_ids(idx, ids: list[str]) -> set[str]:
+    existing = set()
+    for i in range(0, len(ids), 100):
+        batch = ids[i:i + 100]
+        result = idx.fetch(ids=batch)
+        existing.update(result.vectors.keys())
+    return existing
+
+
 def _embed_with_retry(pc: Pinecone, texts: list[str]) -> list:
     for attempt in range(4):
         try:
@@ -180,8 +190,8 @@ def _embed_with_retry(pc: Pinecone, texts: list[str]) -> list:
                 inputs=texts,
                 parameters={"input_type": "passage", "truncate": "END"},
             )
-        except PineconeApiException as e:
-            if e.status == 429 and attempt < 3:
+        except Exception as e:
+            if "429" in str(e) and "RESOURCE_EXHAUSTED" not in str(e) and attempt < 3:
                 wait = 60 * (attempt + 1)
                 log.warning("Rate limited — waiting %ds before retry %d/3", wait, attempt + 1)
                 time.sleep(wait)
@@ -210,6 +220,8 @@ def main():
     parser = argparse.ArgumentParser(description="Index Beverly MA meeting minutes (chunked)")
     parser.add_argument("--clean", action="store_true",
                         help="Delete old single-meeting vectors before upserting chunks")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-summarize and re-embed all meetings, even if already indexed")
     args = parser.parse_args()
 
     load_dotenv(Path(__file__).parent.parent / ".env")
@@ -231,6 +243,26 @@ def main():
 
     if args.clean:
         delete_old_vectors(meetings, idx)
+
+    if not args.force:
+        # Use _c0 chunk as proxy — if summary chunk exists, full meeting is indexed
+        candidate_ids = [
+            f"{_base_id(m)}_c0"
+            for m in meetings
+            if m.get("meeting_id") and (m.get("minutes_text") or "").strip()
+        ]
+        existing = _fetch_existing_ids(idx, candidate_ids)
+        before = len(meetings)
+        meetings = [
+            m for m in meetings
+            if f"{_base_id(m)}_c0" not in existing
+        ]
+        log.info("%d new meetings to process (%d already indexed, skipping)",
+                 len(meetings), before - len(meetings))
+
+    if not meetings:
+        log.info("Nothing new to index.")
+        return
 
     vectors = build_vectors(meetings, claude)
     log.info("%d total chunks ready to index", len(vectors))
