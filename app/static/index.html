@@ -103,7 +103,7 @@
           thinking.appendChild(div);
         }
       } catch {
-        thinking.textContent = 'Something went wrong. Please try again.';
+        thinking.textContent = 'The assistant is temporarily unavailable. We\'re aware of the issue and working on it — please check back soon.';
         history.pop(); // remove the user turn we optimistically pushed
       }
       btn.disabled = false;

@@ -205,10 +205,8 @@ async def ask(q: Question):
     except _EmbedQuotaError:
         return JSONResponse({
             "answer": (
-                "The search service is temporarily unavailable — the monthly usage limit for "
-                "the underlying search index has been reached. It resets on June 1. "
-                "In the meantime, you can browse Beverly civic information directly at "
-                "beverlyma.gov."
+                "The assistant is temporarily unavailable. We're aware of the issue and "
+                "working on it — please check back soon."
             ),
             "sources": [],
         })
