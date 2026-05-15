@@ -71,12 +71,21 @@ def _query_variants(question: str) -> list[str]:
     return [question] + variants[:2]
 
 
+class _EmbedQuotaError(Exception):
+    pass
+
+
 def _embed(text: str) -> list[float]:
-    return _pc.inference.embed(
-        model=EMBED_MODEL,
-        inputs=[text],
-        parameters={"input_type": "query", "truncate": "END"},
-    )[0]["values"]
+    try:
+        return _pc.inference.embed(
+            model=EMBED_MODEL,
+            inputs=[text],
+            parameters={"input_type": "query", "truncate": "END"},
+        )[0]["values"]
+    except Exception as e:
+        if "RESOURCE_EXHAUSTED" in str(e) or "quota" in str(e).lower():
+            raise _EmbedQuotaError() from e
+        raise
 
 
 ORIGINAL_QUERY_BOOST = 0.015  # boosts original query results vs. LLM-generated variants
@@ -191,7 +200,18 @@ def answer(question: str, sources: list[dict], history: list[dict] = []) -> str:
 
 @app.post("/ask")
 async def ask(q: Question):
-    sources = retrieve(q.text, q.history)
+    try:
+        sources = retrieve(q.text, q.history)
+    except _EmbedQuotaError:
+        return JSONResponse({
+            "answer": (
+                "The search service is temporarily unavailable — the monthly usage limit for "
+                "the underlying search index has been reached. It resets on June 1. "
+                "In the meantime, you can browse Beverly civic information directly at "
+                "beverlyma.gov."
+            ),
+            "sources": [],
+        })
     response = answer(q.text, sources, q.history)
     return JSONResponse({"answer": response, "sources": sources})
 
